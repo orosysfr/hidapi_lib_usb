@@ -80,9 +80,9 @@ extern "C" {
 #endif
 
 static struct hid_api_version api_version = {
-	.major = HID_API_VERSION_MAJOR,
-	.minor = HID_API_VERSION_MINOR,
-	.patch = HID_API_VERSION_PATCH
+	HID_API_VERSION_MAJOR,
+	HID_API_VERSION_MINOR,
+	HID_API_VERSION_PATCH
 };
 
 #ifndef HIDAPI_USE_DDK
