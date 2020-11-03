@@ -185,9 +185,9 @@ static void free_hid_device(hid_device *dev)
 }
 
 static struct hid_api_version api_version = {
-	.major = HID_API_VERSION_MAJOR,
-	.minor = HID_API_VERSION_MINOR,
-	.patch = HID_API_VERSION_PATCH
+	HID_API_VERSION_MAJOR,
+	HID_API_VERSION_MINOR,
+	HID_API_VERSION_PATCH
 };
 
 static	IOHIDManagerRef hid_mgr = 0x0;

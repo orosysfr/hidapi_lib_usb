@@ -80,9 +80,9 @@ extern "C" {
 #endif
 
 static struct hid_api_version api_version = {
-	.major = HID_API_VERSION_MAJOR,
-	.minor = HID_API_VERSION_MINOR,
-	.patch = HID_API_VERSION_PATCH
+	HID_API_VERSION_MAJOR,
+	HID_API_VERSION_MINOR,
+	HID_API_VERSION_PATCH
 };
 
 #ifndef HIDAPI_USE_DDK
@@ -192,7 +192,7 @@ static void register_error(hid_device *dev, const char *op)
 		NULL,
 		GetLastError(),
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPVOID)&msg, 0/*sz*/,
+		(LPWSTR)&msg, 0/*sz*/,
 		NULL);
 	
 	/* Get rid of the CR and LF that FormatMessage() sticks at the
