@@ -918,7 +918,7 @@ static int set_report(hid_device *dev, IOHIDReportType type, const unsigned char
 	                           data_to_send, length_to_send);
 
 	if (res == kIOReturnSuccess) {
-		return length;
+		return (int)length;
 	}
 
 	return -1;
@@ -952,7 +952,7 @@ static int get_report(hid_device *dev, IOHIDReportType type, unsigned char *data
 		if (report_id == 0x0) { /* 0 report number still present at the beginning */
 			report_length++;
 		}
-		return report_length;
+		return (int)report_length;
 	}
 
 	return -1;
@@ -974,7 +974,7 @@ static int return_data(hid_device *dev, unsigned char *data, size_t length)
 	dev->input_reports = rpt->next;
 	free(rpt->data);
 	free(rpt);
-	return len;
+	return (int)len;
 }
 
 static int cond_wait(const hid_device *dev, pthread_cond_t *cond, pthread_mutex_t *mutex)
