@@ -469,8 +469,9 @@ static struct hid_device_info *create_device_info_with_usage(IOHIDDeviceRef dev,
 		/* Fill in the kernel_entry_id */
 		res = IORegistryEntryGetRegistryEntryID(iokit_dev, &entry_id);
 		if (res == KERN_SUCCESS) {
-			if ((cur_dev->path = (char*)calloc(32 + 3 + 1, 1)) != NULL) {
-				sprintf(cur_dev->path, "id:%llu", entry_id);
+			int const maxPathSize = 32 + 3 + 1;
+			if ((cur_dev->path = (char*)calloc(maxPathSize, 1)) != NULL) {
+				snprintf(cur_dev->path, maxPathSize, "id:%llu", entry_id);
 			} else {
 				cur_dev->path = strdup("");
 			}
