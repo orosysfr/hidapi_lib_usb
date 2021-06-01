@@ -462,10 +462,23 @@ static struct hid_device_info *create_device_info_with_usage(IOHIDDeviceRef dev,
 	/* Fill in the path (IOService plane) */
 	iokit_dev = hidapi_IOHIDDeviceGetService(dev);
 	res = IORegistryEntryGetPath(iokit_dev, kIOServicePlane, path);
-	if (res == KERN_SUCCESS)
+	if (res == KERN_SUCCESS && path[0] != '\0')
 		cur_dev->path = strdup(path);
-	else
-		cur_dev->path = strdup("");
+	else {
+		uint64_t entry_id;
+		/* Fill in the kernel_entry_id */
+		res = IORegistryEntryGetRegistryEntryID(iokit_dev, &entry_id);
+		if (res == KERN_SUCCESS) {
+			int const maxPathSize = 32 + 3 + 1;
+			if ((cur_dev->path = (char*)calloc(maxPathSize, 1)) != NULL) {
+				snprintf(cur_dev->path, maxPathSize, "id:%llu", entry_id);
+			} else {
+				cur_dev->path = strdup("");
+			}
+		} else {
+			cur_dev->path = strdup("");
+		}
+	}
 
 	/* Serial Number */
 	get_serial_number(dev, buf, BUF_LEN);
@@ -834,10 +847,28 @@ hid_device * HID_API_EXPORT hid_open_path(const char *path)
 
 	dev = new_hid_device();
 
-	/* Get the IORegistry entry for the given path */
-	entry = IORegistryEntryFromPath(kIOMasterPortDefault, path);
-	if (entry == MACH_PORT_NULL) {
-		/* Path wasn't valid (maybe device was removed?) */
+	/* Check if the path represents IORegistry path or an IORegistryEntry ID */
+	if (strlen(path) > 3) {
+		if (strncmp("id:", path, 3) == 0) {
+			/* Get the IORegistry entry for the given ID */
+			uint64_t entry_id;
+
+			entry_id = strtoull(path+3, NULL, 10);
+
+			entry = IOServiceGetMatchingService(kIOMasterPortDefault, IORegistryEntryIDMatching(entry_id));
+			if (entry == 0) {
+				/* No service found for ID */
+				goto return_error;
+			}
+		} else {
+			/* Get the IORegistry entry for the given path */
+			entry = IORegistryEntryFromPath(kIOMasterPortDefault, path);
+			if (entry == MACH_PORT_NULL) {
+				/* Path wasn't valid (maybe device was removed?) */
+				goto return_error;
+			}
+		}
+	} else {
 		goto return_error;
 	}
 
