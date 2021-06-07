@@ -153,7 +153,6 @@ struct hid_device_ {
 		BOOL read_pending;
 		char *read_buf;
 		OVERLAPPED ol;
-		OVERLAPPED write_ol;			  
 };
 
 static hid_device *new_hid_device()
@@ -172,8 +171,6 @@ static hid_device *new_hid_device()
 	dev->read_buf = NULL;
 	memset(&dev->ol, 0, sizeof(dev->ol));
 	dev->ol.hEvent = CreateEvent(NULL, FALSE, FALSE /*initial state f=nonsignaled*/, NULL);
-	memset(&dev->write_ol, 0, sizeof(dev->write_ol));
-	dev->write_ol.hEvent = CreateEvent(NULL, FALSE, FALSE /*inital state f=nonsignaled*/, NULL);											  
 
 	return dev;
 }
@@ -181,7 +178,6 @@ static hid_device *new_hid_device()
 static void free_hid_device(hid_device *dev)
 {
 	CloseHandle(dev->ol.hEvent);
-	CloseHandle(dev->write_ol.hEvent);							   
 	CloseHandle(dev->device_handle);
 	LocalFree(dev->last_error_str);
 	free(dev->write_buf);
@@ -655,9 +651,11 @@ int HID_API_EXPORT HID_API_CALL hid_write(hid_device *dev, const unsigned char *
 	DWORD bytes_written = 0;
 	int function_result = -1;
 	BOOL res;
-	BOOL overlapped = FALSE;
 
+	OVERLAPPED ol;
 	unsigned char *buf;
+
+	memset(&ol, 0, sizeof(ol));
 
 	/* Make sure the right number of bytes are passed to WriteFile. Windows
 	   expects the number of bytes which are in the _longest_ report (plus
@@ -677,7 +675,7 @@ int HID_API_EXPORT HID_API_CALL hid_write(hid_device *dev, const unsigned char *
 		length = dev->output_report_length;
 	}
 
-	res = WriteFile(dev->device_handle, buf, (DWORD) length, NULL, &dev->write_ol);
+	res = WriteFile(dev->device_handle, buf, (DWORD) length, NULL, &ol);
 	
 	if (!res) {
 		if (GetLastError() != ERROR_IO_PENDING) {
@@ -685,33 +683,21 @@ int HID_API_EXPORT HID_API_CALL hid_write(hid_device *dev, const unsigned char *
 			register_error(dev, "WriteFile");
 			goto end_of_function;
 		}
-		overlapped = TRUE;
 	}
 
-	if (overlapped) {
-		/* Wait for the transaction to complete. This makes
-		   hid_write() synchronous. */
-		res = WaitForSingleObject(dev->write_ol.hEvent, 1000);
-		if (res != WAIT_OBJECT_0) {
-			/* There was a Timeout. */
-			register_error(dev, "WriteFile/WaitForSingleObject Timeout");
-			goto end_of_function;
-		}
-
-		/* Get the result. */
-		res = GetOverlappedResult(dev->device_handle, &dev->write_ol, &bytes_written, FALSE/*wait*/);
-		if (res) {
-			function_result = bytes_written;
-		}
-		else {
-			/* The Write operation failed. */
-			register_error(dev, "WriteFile");
-			goto end_of_function;
-		}
+	/* Wait here until the write is done. This makes
+	   hid_write() synchronous. */
+	res = GetOverlappedResult(dev->device_handle, &ol, &bytes_written, TRUE/*wait*/);
+	if (!res) {
+		/* The Write operation failed. */
+		register_error(dev, "WriteFile");
+		goto end_of_function;
+	} else {
+		function_result = (int)bytes_written;
 	}
 
 end_of_function:
-	return function_result;
+	return (int)function_result;
 }
 
 
@@ -720,7 +706,6 @@ int HID_API_EXPORT HID_API_CALL hid_read_timeout(hid_device *dev, unsigned char 
 	DWORD bytes_read = 0;
 	size_t copy_len = 0;
 	BOOL res = FALSE;
-	BOOL overlapped = FALSE;
 
 	/* Copy the handle for convenience. */
 	HANDLE ev = dev->ol.hEvent;
@@ -740,29 +725,24 @@ int HID_API_EXPORT HID_API_CALL hid_read_timeout(hid_device *dev, unsigned char 
 				dev->read_pending = FALSE;
 				goto end_of_function;
 			}
-			overlapped = TRUE;	   
-		}																		   
-	}
-	else {
-		overlapped = TRUE;	
-	}
-
-	if (overlapped) {
-		if (milliseconds >= 0) {
-			/* See if there is any data yet. */
-			res = WaitForSingleObject(ev, milliseconds);
-			if (res != WAIT_OBJECT_0) {
-				/* There was no data this time. Return zero bytes available,
-				   but leave the Overlapped I/O running. */
-				return 0;
-			}
 		}
-
-		/* Either WaitForSingleObject() told us that ReadFile has completed, or
-		   we are in non-blocking mode. Get the number of bytes read. The actual
-		   data has been copied to the data[] array which was passed to ReadFile(). */
-		res = GetOverlappedResult(dev->device_handle, &dev->ol, &bytes_read, TRUE/*wait*/);
 	}
+
+	if (milliseconds >= 0) {
+		/* See if there is any data yet. */
+		res = WaitForSingleObject(ev, milliseconds);
+		if (res != WAIT_OBJECT_0) {
+			/* There was no data this time. Return zero bytes available,
+			   but leave the Overlapped I/O running. */
+			return 0;
+		}
+	}
+
+	/* Either WaitForSingleObject() told us that ReadFile has completed, or
+	   we are in non-blocking mode. Get the number of bytes read. The actual
+	   data has been copied to the data[] array which was passed to ReadFile(). */
+	res = GetOverlappedResult(dev->device_handle, &dev->ol, &bytes_read, TRUE/*wait*/);
+	
 	/* Set pending back to false, even if GetOverlappedResult() returned error. */
 	dev->read_pending = FALSE;
 
