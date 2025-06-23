@@ -433,7 +433,7 @@ static struct hid_device_info *create_device_info_with_usage(IOHIDDeviceRef dev,
 {
 	unsigned short dev_vid;
 	unsigned short dev_pid;
-	int BUF_LEN = 256;
+#define BUF_LEN 256
 	wchar_t buf[BUF_LEN];
 
 	struct hid_device_info *cur_dev;
@@ -855,14 +855,22 @@ hid_device * HID_API_EXPORT hid_open_path(const char *path)
 
 			entry_id = strtoull(path+3, NULL, 10);
 
-			entry = IOServiceGetMatchingService(kIOMasterPortDefault, IORegistryEntryIDMatching(entry_id));
+			#if __MAC_OS_X_VERSION_MIN_REQUIRED < 120000
+				entry = IOServiceGetMatchingService(kIOMasterPortDefault, IORegistryEntryIDMatching(entry_id));
+			#else
+				entry = IOServiceGetMatchingService(kIOMainPortDefault, IORegistryEntryIDMatching(entry_id));
+			#endif
 			if (entry == 0) {
 				/* No service found for ID */
 				goto return_error;
 			}
 		} else {
 			/* Get the IORegistry entry for the given path */
-			entry = IORegistryEntryFromPath(kIOMasterPortDefault, path);
+			#if __MAC_OS_X_VERSION_MIN_REQUIRED < 120000
+				entry = IORegistryEntryFromPath(kIOMasterPortDefault, path);
+			#else
+				entry = IORegistryEntryFromPath(kIOMainPortDefault, path);
+			#endif
 			if (entry == MACH_PORT_NULL) {
 				/* Path wasn't valid (maybe device was removed?) */
 				goto return_error;
